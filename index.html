@@ -661,6 +661,23 @@
 
         // --- Configuración de Web Audio API ---
         async function initAudio() {
+            // Declarar variables y funciones al inicio para evitar ReferenceError
+            let audioInitialized = false;
+            function initAudioNodes() {
+                if (!audioInitialized) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    gainNode = audioContext.createGain();
+                    analyser.fftSize = 256;
+                    analyser.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    gainNode.gain.value = subtleVolumeControl.value;
+                    subtleVolumeControl.addEventListener('input', (event) => {
+                        gainNode.gain.value = event.target.value;
+                    });
+                    audioInitialized = true;
+                }
+            }
             // Botones para cambiar de audio/visualizador en controles sutiles
             const subtlePrevAudioButton = document.getElementById('subtlePrevAudioButton');
             const subtleNextAudioButton = document.getElementById('subtleNextAudioButton');
@@ -696,28 +713,11 @@
 
                 // Inicializar visualizador con el primer audio
                 if (audioFiles.length > 0) {
+                    initAudioNodes(); // <-- Inicializa audioContext ANTES de cargar el buffer
                     await loadAudioBuffer(audioFiles[0]);
                     await loadImagesForAudio(0);
                 } else {
                     // monkeydev2.ddns.net('No se encontraron archivos de audio en la carpeta audios.', 5000);
-                }
-
-                // Inicialización de audioContext y nodos solo al primer click en play
-                let audioInitialized = false;
-                function initAudioNodes() {
-                    if (!audioInitialized) {
-                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                        analyser = audioContext.createAnalyser();
-                        gainNode = audioContext.createGain();
-                        analyser.fftSize = 256;
-                        analyser.connect(gainNode);
-                        gainNode.connect(audioContext.destination);
-                        gainNode.gain.value = subtleVolumeControl.value;
-                        subtleVolumeControl.addEventListener('input', (event) => {
-                            gainNode.gain.value = event.target.value;
-                        });
-                        audioInitialized = true;
-                    }
                 }
 
                 // Event listeners para los botones de control de audio sutiles
@@ -753,18 +753,24 @@
 
         // Cargar lista de archivos de las carpetas audios e imagenes
         async function loadMediaFiles() {
-            // Solución manual: leer archivos JSON
             try {
                 let audioResp = await fetch('audios.json');
+                if (!audioResp.ok) {
+                    showMessage('Error al cargar audios.json: ' + audioResp.statusText, 6000);
+                    throw new Error('No se pudo cargar audios.json');
+                }
                 audioFiles = await audioResp.json();
                 let imgResp = await fetch('imagenes.json');
+                if (!imgResp.ok) {
+                    showMessage('Error al cargar imagenes.json: ' + imgResp.statusText, 6000);
+                    throw new Error('No se pudo cargar imagenes.json');
+                }
                 let imageFiles = await imgResp.json();
-                // Asociar imágenes por orden
                 let imagesPerAudio = Math.floor(imageFiles.length / audioFiles.length) || 1;
                 imagesByAudio = audioFiles.map((_, i) => imageFiles.slice(i * imagesPerAudio, (i + 1) * imagesPerAudio));
                 renderTrackList();
             } catch (e) {
-                // showMessage('Error al cargar archivos de audios o imágenes.', 5000);
+                showMessage('Error al cargar archivos de audios o imágenes: ' + e.message, 6000);
             }
         }
 
@@ -772,10 +778,14 @@
         async function loadAudioBuffer(audioUrl) {
             try {
                 let resp = await fetch(audioUrl);
+                if (!resp.ok) {
+                    showMessage('Error al cargar el archivo de audio: ' + audioUrl + ' (' + resp.statusText + ')', 6000);
+                    throw new Error('No se pudo cargar el archivo de audio');
+                }
                 let arrayBuffer = await resp.arrayBuffer();
                 audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
             } catch (e) {
-                // showMessage('Error al cargar el archivo de audio: ' + audioUrl, 5000);
+                showMessage('Error al cargar el archivo de audio: ' + audioUrl + ' (' + e.message + ')', 6000);
             }
         }
 
@@ -872,7 +882,7 @@
                 subtlePlayPauseButton.innerHTML = '<i class="fa-solid fa-pause"></i>';
             }
             if (!audioBuffer) {
-                // showMessage('Por favor, carga un archivo de audio primero.', 3000);
+                showMessage('Por favor, carga un archivo de audio primero.', 4000);
                 return;
             }
 
