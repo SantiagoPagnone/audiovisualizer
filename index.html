@@ -243,6 +243,8 @@
 </head>
 <body>
     <div id="message-box"></div>
+    <!-- Reproductor nativo oculto para móviles -->
+    <audio id="nativeAudioPlayer" style="display:none;" controls preload="auto"></audio>
     <!-- Eliminado el panel central -->
 
     <!-- Controles de audio sutiles -->
@@ -257,15 +259,21 @@
             <button id="subtlePlayPauseButton" class="btn" title="Reproducir/Pausar"><i class="fa-solid fa-play"></i></button>
             <button id="subtleStopButton" class="btn" title="Detener"><i class="fa-solid fa-stop"></i></button>
             <button id="subtleNextAudioButton" class="btn" title="Siguiente"><i class="fa-solid fa-forward-step"></i></button>
+            <button id="showMobileTrackListButton" class="btn" title="Elegir tema" style="display:none;"><i class="fa-solid fa-list"></i></button>
             <div class="flex items-center gap-2">
                 <input type="range" id="subtleVolumeControl" min="0" max="1" step="0.01" value="0.5">
             </div>
         </div>
     </div>
 
-    <!-- Lista vertical de temas -->
+    <!-- Lista vertical de temas (solo desktop) -->
     <div id="track-list" style="position: fixed; bottom: 20px; right: 20px; z-index: 20; display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem;">
         <!-- Los temas se renderizan dinámicamente -->
+    </div>
+    <!-- Modal central para lista de temas en mobile -->
+    <div id="mobile-track-list-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(30,30,50,0.85); z-index:100; justify-content:center; align-items:center;">
+        <div id="mobile-track-list" class="glass" style="background:rgba(30,30,50,0.35); backdrop-filter: blur(8px) saturate(180%); -webkit-backdrop-filter: blur(8px) saturate(180%); border-radius:1rem; box-shadow:0 10px 20px rgba(0,0,0,0.3); padding:2rem 1.2rem; max-width:90vw; max-height:80vh; overflow-y:auto; display:flex; flex-direction:column; align-items:center; gap:1rem;"></div>
+        <button id="closeMobileTrackList" style="position:absolute; top:18px; right:18px; background:#e94560; color:#fff; border:none; border-radius:50%; width:38px; height:38px; font-size:1.3rem; box-shadow:0 2px 8px rgba(0,0,0,0.18); cursor:pointer;">&times;</button>
     </div>
 
     <!-- Carga de Three.js -->
@@ -277,62 +285,127 @@
         // Renderizar la lista vertical de temas
         function renderTrackList() {
             const trackList = document.getElementById('track-list');
+            const showMobileTrackListButton = document.getElementById('showMobileTrackListButton');
+            // Detectar si es mobile
+            const isMobile = window.innerWidth <= 600 || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+            // En mobile, ocultar la lista superior y mostrar solo el botón
+            if (isMobile) {
+                trackList.style.display = 'none';
+                showMobileTrackListButton.style.display = 'inline-block';
+            } else {
+                trackList.style.display = 'flex';
+                showMobileTrackListButton.style.display = 'none';
+            }
             trackList.innerHTML = '';
+            if (!audioFiles || audioFiles.length === 0) return;
+            if (!isMobile) {
+                for (let i = 0; i < audioFiles.length; i++) {
+                    const item = document.createElement('div');
+                    item.textContent = audioFiles[i].split('/').pop();
+                    item.style.transition = 'transform 0.3s, font-size 0.3s, opacity 0.3s';
+                    item.style.cursor = 'default';
+                    item.style.background = 'rgba(30,30,50,0.35)';
+                    item.style.backdropFilter = 'blur(6px) saturate(180%)';
+                    item.style.webkitBackdropFilter = 'blur(6px) saturate(180%)';
+                    item.style.borderRadius = '0.7rem';
+                    item.style.border = '1px solid rgba(255,255,255,0.18)';
+                    item.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
+                    item.style.color = '#e0e0e0';
+                    item.style.padding = '0.4rem 1.2rem';
+                    item.style.fontSize = '0.7rem';
+                    if (i === currentVisualizerIndex) {
+                        item.style.transform = 'scale(1)';
+                        item.style.fontSize = '1rem';
+                        item.style.opacity = '1';
+                        item.style.fontWeight = 'bold';
+                    } else if (i === currentVisualizerIndex - 1 || (currentVisualizerIndex === 0 && i === audioFiles.length - 1)) {
+                        item.style.transform = 'scale(0.9)';
+                        item.style.fontSize = '0.8rem';
+                        item.style.opacity = '0.7';
+                    } else if (i === currentVisualizerIndex + 1 || (currentVisualizerIndex === audioFiles.length - 1 && i === 0)) {
+                        item.style.transform = 'scale(0.9)';
+                        item.style.fontSize = '0.8rem';
+                        item.style.opacity = '0.7';
+                    } else {
+                        item.style.transform = 'scale(0.8)';
+                        item.style.fontSize = '0.7rem';
+                        item.style.opacity = '0.4';
+                    }
+                    // Sin acción de click
+                    trackList.appendChild(item);
+                }
+                trackList.style.opacity = '1';
+            }
+        }
+        // Renderizar lista de temas en modal central para mobile
+        function renderMobileTrackList() {
+            const mobileTrackListModal = document.getElementById('mobile-track-list-modal');
+            const mobileTrackList = document.getElementById('mobile-track-list');
+            mobileTrackList.innerHTML = '';
             if (!audioFiles || audioFiles.length === 0) return;
             for (let i = 0; i < audioFiles.length; i++) {
                 const item = document.createElement('div');
                 item.textContent = audioFiles[i].split('/').pop();
                 item.style.transition = 'transform 0.3s, font-size 0.3s, opacity 0.3s';
-                item.style.cursor = 'pointer';
-                item.style.background = 'rgba(30,30,50,0.35)';
-                item.style.backdropFilter = 'blur(6px) saturate(180%)';
-                item.style.webkitBackdropFilter = 'blur(6px) saturate(180%)';
+                item.style.cursor = 'default';
+                item.style.background = i === currentVisualizerIndex ? '#e94560' : 'rgba(30,30,50,0.35)';
+                item.style.color = i === currentVisualizerIndex ? '#fff' : '#e0e0e0';
                 item.style.borderRadius = '0.7rem';
                 item.style.border = '1px solid rgba(255,255,255,0.18)';
                 item.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
-                item.style.color = '#e0e0e0';
-                item.style.padding = '0.4rem 1.2rem';
-                item.style.fontSize = '0.7rem'; // font-size base más pequeño
-                if (i === currentVisualizerIndex) {
-                    item.style.transform = 'scale(1)';
-                    item.style.fontSize = '1rem';
-                    item.style.opacity = '1';
-                    item.style.fontWeight = 'bold';
-                } else if (i === currentVisualizerIndex - 1 || (currentVisualizerIndex === 0 && i === audioFiles.length - 1)) {
-                    item.style.transform = 'scale(0.9)';
-                    item.style.fontSize = '0.8rem';
-                    item.style.opacity = '0.7';
-                } else if (i === currentVisualizerIndex + 1 || (currentVisualizerIndex === audioFiles.length - 1 && i === 0)) {
-                    item.style.transform = 'scale(0.9)';
-                    item.style.fontSize = '0.8rem';
-                    item.style.opacity = '0.7';
-                } else {
-                    item.style.transform = 'scale(0.8)';
-                    item.style.fontSize = '0.7rem';
-                    item.style.opacity = '0.4';
-                }
+                item.style.padding = '0.7rem 2rem';
+                item.style.fontSize = i === currentVisualizerIndex ? '1.1rem' : '0.9rem';
+                item.style.fontWeight = i === currentVisualizerIndex ? 'bold' : 'normal';
+                item.style.backdropFilter = 'blur(8px) saturate(180%)';
+                item.style.webkitBackdropFilter = 'blur(8px) saturate(180%)';
+                // Acción de click para cambiar de tema en mobile
+                item.style.cursor = 'pointer';
                 item.addEventListener('click', async () => {
-                    // Fade out actual
-                    trackList.style.transition = 'opacity 0.4s';
-                    trackList.style.opacity = '0';
-                    setTimeout(async () => {
+                    if (i !== currentVisualizerIndex) {
+                        // Detener el audio actual antes de cambiar
+                        if (useNativeAudio) {
+                            nativeAudioPlayer.pause();
+                            nativeAudioPlayer.onended = null;
+                            nativeAudioPlayer.currentTime = 0;
+                        } else {
+                            if (audioSource) {
+                                audioSource.onended = null;
+                                audioSource.stop();
+                                audioSource.disconnect();
+                                isPlaying = false;
+                                audioStartTime = 0;
+                                audioPausedAt = 0;
+                            }
+                        }
                         currentVisualizerIndex = i;
                         await changeVisualizer(i);
                         renderTrackList();
-                        // Fade in nuevo
-                        trackList.style.transition = 'opacity 0.4s';
-                        trackList.style.opacity = '1';
-                        // Si está en modo móvil, centra el elemento en la parte superior
-                        if (window.innerWidth <= 600) {
-                            item.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'center' });
-                        }
-                    }, 400);
+                    }
+                    // Ocultar el modal después de seleccionar
+                    document.getElementById('mobile-track-list-modal').style.display = 'none';
                 });
-                trackList.appendChild(item);
+                mobileTrackList.appendChild(item);
             }
-            // Asegura que la lista esté visible al renderizar
-            trackList.style.opacity = '1';
         }
+        // Mostrar/ocultar modal de lista de temas en mobile
+        document.addEventListener('DOMContentLoaded', () => {
+            const showMobileTrackListButton = document.getElementById('showMobileTrackListButton');
+            const mobileTrackListModal = document.getElementById('mobile-track-list-modal');
+            const closeMobileTrackList = document.getElementById('closeMobileTrackList');
+            showMobileTrackListButton.addEventListener('click', () => {
+                renderMobileTrackList();
+                mobileTrackListModal.style.display = 'flex';
+            });
+            closeMobileTrackList.addEventListener('click', () => {
+                mobileTrackListModal.style.display = 'none';
+            });
+            // Cerrar modal al hacer click fuera de la lista
+            mobileTrackListModal.addEventListener('click', (e) => {
+                if (e.target === mobileTrackListModal) {
+                    mobileTrackListModal.style.display = 'none';
+                }
+            });
+        });
         // Variables globales para Three.js
         let scene, camera, renderer, controls;
         let planeMesh; // Malla del plano principal
@@ -340,13 +413,15 @@
         let uniforms; // Uniforms para el shader del plano principal
         let backgroundUniforms; // Uniforms para el shader de la esfera de fondo
 
-        // Variables globales para Web Audio API
+        // Variables globales para Web Audio API y nativo
         let audioContext;
         let analyser;
         let audioSource;
         let gainNode;
         let audioBuffer; // Almacenará el buffer de audio cargado
         let isPlaying = false;
+        let useNativeAudio = false;
+        const nativeAudioPlayer = document.getElementById('nativeAudioPlayer');
 
         // Variables de imágenes y transición (Plano Principal)
         let imageTextures = []; // Array para almacenar todas las texturas cargadas para el plano principal
@@ -358,7 +433,7 @@
             FADE_IN: 2
         };
         let transitionState = TRANSITION_STATE.IDLE;
-        const transitionDuration = 3.0; // Duración total de la transición en segundos
+        const transitionDuration = 1.2; // Duración total de la transición en segundos (más rápida)
         const minDisplayTime = 5.0; // Tiempo mínimo que una imagen se muestra antes de transicionar
         let lastTransitionTime = 0; // Tiempo en segundos desde el inicio de la animación
 
@@ -659,11 +734,13 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // --- Configuración de Web Audio API ---
+        // --- Configuración de Web Audio API y nativo ---
         async function initAudio() {
-            // Declarar variables y funciones al inicio para evitar ReferenceError
+            // Detectar si es móvil y usar <audio> nativo
+            useNativeAudio = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
             let audioInitialized = false;
             function initAudioNodes() {
+                if (useNativeAudio) return; // No inicializar WebAudio en móviles
                 if (!audioInitialized) {
                     audioContext = new (window.AudioContext || window.webkitAudioContext)();
                     analyser = audioContext.createAnalyser();
@@ -683,6 +760,19 @@
             const subtleNextAudioButton = document.getElementById('subtleNextAudioButton');
             subtlePrevAudioButton.addEventListener('click', async () => {
                 if (audioFiles.length < 2) return;
+                subtlePrevAudioButton.disabled = true;
+                subtleNextAudioButton.disabled = true;
+                // Limpiar eventos y pausar antes de cambiar
+                if (useNativeAudio) {
+                    nativeAudioPlayer.pause();
+                    nativeAudioPlayer.onended = null;
+                } else {
+                    if (audioSource) {
+                        audioSource.onended = null;
+                        audioSource.stop();
+                        audioSource.disconnect();
+                    }
+                }
                 const trackList = document.getElementById('track-list');
                 trackList.style.transition = 'opacity 0.4s';
                 trackList.style.opacity = '0';
@@ -692,10 +782,29 @@
                     renderTrackList();
                     trackList.style.transition = 'opacity 0.4s';
                     trackList.style.opacity = '1';
+                    subtlePrevAudioButton.disabled = false;
+                    subtleNextAudioButton.disabled = false;
                 }, 400);
             });
             subtleNextAudioButton.addEventListener('click', async () => {
                 if (audioFiles.length < 2) return;
+                subtlePrevAudioButton.disabled = true;
+                subtleNextAudioButton.disabled = true;
+                // Limpiar eventos y pausar antes de cambiar
+                if (useNativeAudio) {
+                    nativeAudioPlayer.pause();
+                    nativeAudioPlayer.onended = null;
+                    nativeAudioPlayer.currentTime = 0;
+                } else {
+                    if (audioSource) {
+                        audioSource.onended = null;
+                        audioSource.stop();
+                        audioSource.disconnect();
+                        isPlaying = false;
+                        audioStartTime = 0;
+                        audioPausedAt = 0;
+                    }
+                }
                 const trackList = document.getElementById('track-list');
                 trackList.style.transition = 'opacity 0.4s';
                 trackList.style.opacity = '0';
@@ -705,6 +814,8 @@
                     renderTrackList();
                     trackList.style.transition = 'opacity 0.4s';
                     trackList.style.opacity = '1';
+                    subtlePrevAudioButton.disabled = false;
+                    subtleNextAudioButton.disabled = false;
                 }, 400);
             });
             try {
@@ -713,29 +824,81 @@
 
                 // Inicializar visualizador con el primer audio
                 if (audioFiles.length > 0) {
-                    initAudioNodes(); // <-- Inicializa audioContext ANTES de cargar el buffer
-                    await loadAudioBuffer(audioFiles[0]);
-                    await loadImagesForAudio(0);
+                    if (useNativeAudio) {
+                        nativeAudioPlayer.src = audioFiles[0];
+                        nativeAudioPlayer.load();
+                        await loadImagesForAudio(0);
+                    } else {
+                        initAudioNodes();
+                        await loadAudioBuffer(audioFiles[0]);
+                        await loadImagesForAudio(0);
+                    }
                 } else {
                     // monkeydev2.ddns.net('No se encontraron archivos de audio en la carpeta audios.', 5000);
                 }
 
                 // Event listeners para los botones de control de audio sutiles
                 subtlePlayPauseButton.addEventListener('click', () => {
-                    initAudioNodes();
-                    if (isPlaying) {
-                        pauseAudio();
+                    if (useNativeAudio) {
+                        if (nativeAudioPlayer.paused) {
+                            nativeAudioPlayer.play();
+                            subtlePlayPauseButton.innerHTML = '<i class="fa-solid fa-pause"></i>';
+                            isPlaying = true;
+                            subtleControls.classList.add('visible');
+                        } else {
+                            nativeAudioPlayer.pause();
+                            subtlePlayPauseButton.innerHTML = '<i class="fa-solid fa-play"></i>';
+                            isPlaying = false;
+                            subtleControls.classList.remove('visible');
+                        }
                     } else {
-                        playAudio();
+                        initAudioNodes();
+                        if (isPlaying) {
+                            pauseAudio();
+                        } else {
+                            playAudio();
+                        }
                     }
                 });
                 subtleStopButton.addEventListener('click', () => {
-                    initAudioNodes();
-                    stopAudio();
+                    if (useNativeAudio) {
+                        nativeAudioPlayer.pause();
+                        nativeAudioPlayer.currentTime = 0;
+                        subtlePlayPauseButton.innerHTML = '<i class="fa-solid fa-play"></i>';
+                        isPlaying = false;
+                        subtleControls.classList.remove('visible');
+                    } else {
+                        initAudioNodes();
+                        stopAudio();
+                    }
                 });
 
                 // Deshabilitado: no cambiar de tema con la rueda del mouse
                 // window.addEventListener('wheel', ... );
+
+                // Sincronizar barra de progreso y volumen con <audio> nativo
+                if (useNativeAudio) {
+                    nativeAudioPlayer.addEventListener('timeupdate', () => {
+                        audioSeekBar.max = nativeAudioPlayer.duration || 1;
+                        audioSeekBar.value = nativeAudioPlayer.currentTime;
+                        audioCurrentTime.textContent = formatTime(nativeAudioPlayer.currentTime);
+                        audioDuration.textContent = formatTime(nativeAudioPlayer.duration);
+                    });
+                    audioSeekBar.addEventListener('input', () => {
+                        nativeAudioPlayer.currentTime = parseFloat(audioSeekBar.value);
+                    });
+                    subtleVolumeControl.addEventListener('input', (event) => {
+                        nativeAudioPlayer.volume = event.target.value;
+                    });
+                    nativeAudioPlayer.volume = subtleVolumeControl.value;
+                    // Reproducir siguiente canción automáticamente al terminar
+                    nativeAudioPlayer.addEventListener('ended', async () => {
+                        if (audioFiles.length > 1) {
+                            currentVisualizerIndex = (currentVisualizerIndex + 1) % audioFiles.length;
+                            await changeVisualizer(currentVisualizerIndex);
+                        }
+                    });
+                }
 
             } catch (e) {
                 console.error('Web Audio API no soportada en este navegador:', e);
@@ -766,8 +929,16 @@
                     throw new Error('No se pudo cargar imagenes.json');
                 }
                 let imageFiles = await imgResp.json();
-                let imagesPerAudio = Math.floor(imageFiles.length / audioFiles.length) || 1;
-                imagesByAudio = audioFiles.map((_, i) => imageFiles.slice(i * imagesPerAudio, (i + 1) * imagesPerAudio));
+                // Para cada canción, asignar varias imágenes aleatorias (mínimo 3, máximo todas)
+                imagesByAudio = audioFiles.map(() => {
+                    // Siempre la primera imagen debe ser 'images/1.webp'
+                    const firstImage = imageFiles.find(img => img.includes('1.webp')) || imageFiles[0];
+                    // Mezclar aleatoriamente el resto, excluyendo '1.webp'
+                    let restImages = imageFiles.filter(img => img !== firstImage).sort(() => Math.random() - 0.5);
+                    // Seleccionar entre 2 y todas las restantes
+                    let count = Math.max(2, Math.floor(Math.random() * (restImages.length - 1)) + 2);
+                    return [firstImage, ...restImages.slice(0, count)];
+                });
                 renderTrackList();
             } catch (e) {
                 showMessage('Error al cargar archivos de audios o imágenes: ' + e.message, 6000);
@@ -822,12 +993,35 @@
 
         // Cambiar de visualizador (audio + imágenes)
         async function changeVisualizer(index) {
-            stopAudio();
-            await loadAudioBuffer(audioFiles[index]);
-            await loadImagesForAudio(index);
-            // showMessage('Visualizador cambiado: ' + audioFiles[index].split('/').pop(), 2000);
-            playAudio();
-            renderTrackList();
+            if (useNativeAudio) {
+                nativeAudioPlayer.pause();
+                nativeAudioPlayer.onended = null;
+                nativeAudioPlayer.src = audioFiles[index];
+                nativeAudioPlayer.load();
+                await loadImagesForAudio(index);
+                nativeAudioPlayer.play();
+                subtlePlayPauseButton.innerHTML = '<i class="fa-solid fa-pause"></i>';
+                isPlaying = true;
+                subtleControls.classList.add('visible');
+                nativeAudioPlayer.onended = async () => {
+                    // Solo avanzar si no fue por botón
+                    if (audioFiles.length > 1) {
+                        currentVisualizerIndex = (currentVisualizerIndex + 1) % audioFiles.length;
+                        await changeVisualizer(currentVisualizerIndex);
+                    }
+                };
+            } else {
+                if (audioSource) {
+                    audioSource.onended = null;
+                    audioSource.stop();
+                    audioSource.disconnect();
+                }
+                await loadAudioBuffer(audioFiles[index]);
+                await loadImagesForAudio(index);
+                // showMessage('Visualizador cambiado: ' + audioFiles[index].split('/').pop(), 2000);
+                playAudio(); // <--- Asegura que la nueva canción inicie
+                renderTrackList();
+            }
         }
 
         // --- Barra de progreso y reposicionamiento ---
@@ -838,6 +1032,7 @@
         let audioPausedAt = 0;
 
         function updateAudioProgress() {
+            if (useNativeAudio) return; // El nativo actualiza solo
             if (!audioSource || !audioBuffer || !isPlaying) return;
             let ctxTime = audioContext.currentTime;
             let elapsed = ctxTime - audioStartTime + audioPausedAt;
@@ -856,27 +1051,46 @@
             return m + ':' + (s < 10 ? '0' : '') + s;
         }
 
-        audioSeekBar.addEventListener('input', () => {
-            if (!audioBuffer) return;
-            let seekTo = parseFloat(audioSeekBar.value);
-            if (audioSource) {
-                audioSource.stop();
-                audioSource.disconnect();
-            }
-            audioSource = audioContext.createBufferSource();
-            audioSource.buffer = audioBuffer;
-            audioSource.connect(analyser);
-            audioSource.loop = true;
-            audioStartTime = audioContext.currentTime;
-            audioPausedAt = seekTo;
-            audioSource.start(0, seekTo % audioBuffer.duration);
-            isPlaying = true;
-        });
+        if (!useNativeAudio) {
+            audioSeekBar.addEventListener('input', () => {
+                if (!audioBuffer) return;
+                let seekTo = parseFloat(audioSeekBar.value);
+                if (audioSource) {
+                    audioSource.onended = null;
+                    audioSource.stop();
+                    audioSource.disconnect();
+                }
+                audioSource = audioContext.createBufferSource();
+                audioSource.buffer = audioBuffer;
+                audioSource.connect(analyser);
+                // audioSource.loop = true; // Quitar loop para que onended funcione
+                audioStartTime = audioContext.currentTime;
+                audioPausedAt = seekTo;
+                audioSource.start(0, seekTo % audioBuffer.duration);
+                isPlaying = true;
+                audioSource.onended = async () => {
+                    if (audioFiles.length > 1) {
+                        if (audioSource) {
+                            audioSource.onended = null;
+                        }
+                        currentVisualizerIndex = (currentVisualizerIndex + 1) % audioFiles.length;
+                        await changeVisualizer(currentVisualizerIndex);
+                    }
+                };
+            });
+        }
 
         setInterval(updateAudioProgress, 500);
 
         // Función para reproducir el audio
         function playAudio() {
+            if (useNativeAudio) {
+                nativeAudioPlayer.play();
+                subtlePlayPauseButton.innerHTML = '<i class="fa-solid fa-pause"></i>';
+                isPlaying = true;
+                subtleControls.classList.add('visible');
+                return;
+            }
             // Cambia el icono a pausa
             if (subtlePlayPauseButton) {
                 subtlePlayPauseButton.innerHTML = '<i class="fa-solid fa-pause"></i>';
@@ -978,15 +1192,29 @@
             setTimeout(creepyScaleLoop, 200);
             planeMesh.__creepyActive = true;
 
+            if (audioSource) {
+                audioSource.onended = null;
+                audioSource.stop();
+                audioSource.disconnect();
+            }
             audioSource = audioContext.createBufferSource();
             audioSource.buffer = audioBuffer;
             audioSource.connect(analyser);
-            audioSource.loop = true;
+            // audioSource.loop = true; // Quitar loop para que onended funcione
             audioStartTime = audioContext.currentTime;
             audioPausedAt = 0;
             audioSource.start(0);
             isPlaying = true;
             subtleControls.classList.add('visible');
+            audioSource.onended = async () => {
+                if (audioFiles.length > 1) {
+                    if (audioSource) {
+                        audioSource.onended = null;
+                    }
+                    currentVisualizerIndex = (currentVisualizerIndex + 1) % audioFiles.length;
+                    await changeVisualizer(currentVisualizerIndex);
+                }
+            };
         }
 
         // Función para pausar el audio
@@ -1048,7 +1276,22 @@
             backgroundUniforms.u_time.value += 0.01;
 
             let audioLevel = 0.0;
-            if (isPlaying && analyser) {
+            if (useNativeAudio) {
+                // En móviles, si el audio está reproduciéndose, usar un valor fijo para animaciones
+                if (isPlaying && !nativeAudioPlayer.paused) {
+                    audioLevel = 0.5 + 0.2 * Math.sin(uniforms.u_time.value * 1.5); // Oscila para dar vida
+                    // Animación de rotación básica
+                    planeMesh.rotation.z += 0.002;
+                    planeMesh.rotation.x += 0.0007;
+                } else {
+                    // Si no se está reproduciendo, el nivel de audio debería tender a cero
+                    if (uniforms.u_audioLevel.value > 0.01) {
+                        audioLevel = uniforms.u_audioLevel.value * 0.95;
+                    } else {
+                        audioLevel = 0.0;
+                    }
+                }
+            } else if (isPlaying && analyser) {
                 const bufferLength = analyser.frequencyBinCount;
                 const dataArray = new Uint8Array(bufferLength);
                 analyser.getByteFrequencyData(dataArray); // Obtiene los datos de frecuencia
