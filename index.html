@@ -691,17 +691,6 @@
                 }, 400);
             });
             try {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioContext.createAnalyser();
-                gainNode = audioContext.createGain();
-                analyser.fftSize = 256;
-                analyser.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                gainNode.gain.value = subtleVolumeControl.value;
-                subtleVolumeControl.addEventListener('input', (event) => {
-                    gainNode.gain.value = event.target.value;
-                });
-
                 // Cargar lista de audios e imágenes
                 await loadMediaFiles();
 
@@ -710,18 +699,40 @@
                     await loadAudioBuffer(audioFiles[0]);
                     await loadImagesForAudio(0);
                 } else {
-                    //                     monkeydev2.ddns.net('No se encontraron archivos de audio en la carpeta audios.', 5000);
+                    // monkeydev2.ddns.net('No se encontraron archivos de audio en la carpeta audios.', 5000);
+                }
+
+                // Inicialización de audioContext y nodos solo al primer click en play
+                let audioInitialized = false;
+                function initAudioNodes() {
+                    if (!audioInitialized) {
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        analyser = audioContext.createAnalyser();
+                        gainNode = audioContext.createGain();
+                        analyser.fftSize = 256;
+                        analyser.connect(gainNode);
+                        gainNode.connect(audioContext.destination);
+                        gainNode.gain.value = subtleVolumeControl.value;
+                        subtleVolumeControl.addEventListener('input', (event) => {
+                            gainNode.gain.value = event.target.value;
+                        });
+                        audioInitialized = true;
+                    }
                 }
 
                 // Event listeners para los botones de control de audio sutiles
                 subtlePlayPauseButton.addEventListener('click', () => {
+                    initAudioNodes();
                     if (isPlaying) {
                         pauseAudio();
                     } else {
                         playAudio();
                     }
                 });
-                subtleStopButton.addEventListener('click', stopAudio);
+                subtleStopButton.addEventListener('click', () => {
+                    initAudioNodes();
+                    stopAudio();
+                });
 
                 // Deshabilitado: no cambiar de tema con la rueda del mouse
                 // window.addEventListener('wheel', ... );
@@ -729,13 +740,13 @@
             } catch (e) {
                 console.error('Web Audio API no soportada en este navegador:', e);
                 // showMessage('Tu navegador no soporta la Web Audio API. Intenta con Chrome o Firefox.', 8000);
-                playButton.disabled = true;
-                pauseButton.disabled = true;
-                stopButton.disabled = true;
-                volumeControl.disabled = true;
-                subtlePlayButton.disabled = true;
-                subtlePauseButton.disabled = true;
-                subtleStopButton.disabled = true;
+                if (typeof playButton !== 'undefined') playButton.disabled = true;
+                if (typeof pauseButton !== 'undefined') pauseButton.disabled = true;
+                if (typeof stopButton !== 'undefined') stopButton.disabled = true;
+                if (typeof volumeControl !== 'undefined') volumeControl.disabled = true;
+                if (typeof subtlePlayButton !== 'undefined') subtlePlayButton.disabled = true;
+                if (typeof subtlePauseButton !== 'undefined') subtlePauseButton.disabled = true;
+                if (typeof subtleStopButton !== 'undefined') subtleStopButton.disabled = true;
                 subtleVolumeControl.disabled = true;
             }
         }
